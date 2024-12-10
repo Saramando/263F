@@ -1,0 +1,142 @@
+import numpy as np   
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# Parameter settings
+initial_force = 0.3    # Initial force in Newtons
+simulation_time = 0.05 # Simulation time 0.05s 
+dt = 0.0001            # Time step
+time_steps = int(simulation_time / dt)  # Number of time steps
+
+# Force linearly decreases from initial_force to 0
+force_values = np.linspace(initial_force, 0, time_steps)
+
+# Rod parameters
+length = 1.0 / 100     # Length of the rod in meters
+area = 0.0000283       # Cross-sectional area in m²
+elastic_modulus = 1.5e9  # Elastic modulus in Pascals
+damping_coefficient = 1.0  # Damping coefficient in Ns/m
+mass = 0.1             # Mass of the rod in kg
+
+def elastic_energy_gradient_and_hessian(displacement, length, area, elastic_modulus):
+    gradient = (elastic_modulus * area / length) * displacement
+    hessian = elastic_modulus * area / length
+    return gradient, hessian
+
+displacements = [0.0]
+velocities = [0.0]
+
+for t in range(1, time_steps):
+    force = force_values[t]
+    prev_disp = displacements[-1]
+    prev_vel = velocities[-1]
+
+    gradient, hessian = elastic_energy_gradient_and_hessian(prev_disp, length, area, elastic_modulus)
+    restoring_force = -gradient
+    acceleration = (force + restoring_force - damping_coefficient * prev_vel) / mass
+
+    new_vel = prev_vel + dt * acceleration
+    new_disp = prev_disp + dt * new_vel
+
+    velocities.append(new_vel)
+    displacements.append(new_disp)
+
+displacements = np.array(displacements)
+time_array = np.linspace(0, simulation_time, time_steps)
+
+# Print displacement info
+print("Max displacement (m):", np.max(displacements))
+print("Min displacement (m):", np.min(displacements))
+
+# Parameters for the octagon
+num_sides = 8
+angle_between_rods = 2 * np.pi / num_sides
+radius = 1.0  # Radius in cm
+
+# Initial State Plot
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+for i in range(num_sides):
+    start_x = radius * np.cos(i * angle_between_rods)
+    start_y = radius * np.sin(i * angle_between_rods)
+    start_z = 0
+    end_x = radius * np.cos((i + 1) * angle_between_rods)
+    end_y = radius * np.sin((i + 1) * angle_between_rods)
+    end_z = 0
+
+    if i == 0:
+        ax.scatter(start_x, start_y, start_z, color='k', s=50, label='Fixed Point')
+        ax.plot([start_x, end_x], [start_y, end_y], [start_z, end_z], color='b', label='Octagon Edge')
+        ax.plot([start_x, 0], [start_y, 0], [start_z, 0], color='r', label='Rod to Center')
+    else:
+        ax.scatter(start_x, start_y, start_z, color='k', s=50)
+        ax.plot([start_x, end_x], [start_y, end_y], [start_z, end_z], color='b')
+        ax.plot([start_x, 0], [start_y, 0], [start_z, 0], color='r')
+
+ax.set_xlabel('X (cm)')
+ax.set_ylabel('Y (cm)')
+ax.set_zlabel('Z (cm)')
+ax.set_title('Initial Octagon Structure (Fixed Corners, Units in cm)')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+# Visualization settings
+interval = int(0.01 / dt)  # every 0.01s
+scaling_factor = 1000000.0   # Scale displacement for visualization
+
+for step in range(0, time_steps, interval):
+    # original displacement in m: displacements[step]
+    # convert to cm and scale for visualization
+    # original formula: deformed_length = (length*100 - displacements[step]*100)
+    # now we just visualize displacement directly:
+    deformed_disp = displacements[step] * scaling_factor  # in scaled units (not physical)
+    
+    # Set Z-axis range based on scaled displacement
+    # For example, we take ±(abs(deformed_disp)*2 + a small offset)
+    max_disp = abs(deformed_disp)*2 + 0.1
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlim([-1.5, 1.5])
+    ax.set_ylim([-1.5, 1.5])
+    ax.set_zlim([-max_disp, max_disp])
+
+    for i in range(num_sides):
+        start_x = radius * np.cos(i * angle_between_rods)
+        start_y = radius * np.sin(i * angle_between_rods)
+        start_z = 0
+        end_x = radius * np.cos((i + 1) * angle_between_rods)
+        end_y = radius * np.sin((i + 1) * angle_between_rods)
+        end_z = 0
+
+        if i == 0 and step == 0:
+            ax.scatter(start_x, start_y, start_z, color='k', s=50, label='Fixed Point')
+            ax.plot([start_x, end_x], [start_y, end_y], [start_z, end_z], color='b', label='Octagon Edge')
+            # Instead of a simple length subtraction, we directly show scaled displacement in Z:
+            ax.plot([start_x, 0], [start_y, 0], [start_z, -deformed_disp], color='r', label='Rod to Center')
+        else:
+            ax.scatter(start_x, start_y, start_z, color='k', s=50)
+            ax.plot([start_x, end_x], [start_y, end_y], [start_z, end_z], color='b')
+            ax.plot([start_x, 0], [start_y, 0], [start_z, -deformed_disp], color='r')
+
+    ax.set_xlabel('X (cm)')
+    ax.set_ylabel('Y (cm)')
+    ax.set_zlabel(f'Z (scaled by {scaling_factor})')
+    ax.set_title(f'3D View (Scaled) at t={step*dt:.5f}s')
+    if step == 0:
+        ax.legend()
+    plt.tight_layout()
+    plt.show()
+
+print("Simulation completed.")
+
+plt.figure(figsize=(8, 5))
+plt.plot(time_array, displacements * 100, label='Dynamic Theoretical Displacement')
+plt.xlabel('Time (s)')
+plt.ylabel('Displacement (cm)')
+plt.title('Dynamic Theoretical Displacement vs. Time')
+plt.legend()
+plt.grid()
+plt.tight_layout()
+plt.show()
